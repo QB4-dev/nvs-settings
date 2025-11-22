@@ -61,15 +61,6 @@ settings_handler_register(my_handler, NULL);
 - Serve settings over HTTP by registering `settings_httpd_handler`
 	with the ESP HTTP server (see ESP HTTPD docs for handler registration).
 
-**API notes**
-
-- The public header `include/settings-defs.h` documents the available
-	setting types and the `setting_t`/`settings_group_t` structures.
-- The component header `include/settings.h` exposes helpers for printing,
-	lookup, default initialization and NVS persistence.
-- Doxygen-style comments are included in the headers for automated
-	documentation generation.
-
 **Configuration**
 
 Optional features are controlled by Kconfig options (configured in
