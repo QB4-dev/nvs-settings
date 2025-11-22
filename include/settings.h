@@ -7,12 +7,11 @@
 #ifndef SETTINGS_H_
 #define SETTINGS_H_
 
-#include <esp_http_server.h>
 #include <esp_err.h>
+#include <esp_http_server.h>
 
 #include "settings-defs.h"
 
-typedef esp_err_t (*settings_handler_t)(const settings_group_t *settings, void *arg);
 /**
  * @brief Type of callback used to handle or process a settings group.
  *

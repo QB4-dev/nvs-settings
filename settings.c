@@ -55,6 +55,7 @@ static int datetime_struct_set(setting_datetime_t *setting)
 
 void settings_pack_print(const settings_group_t *settings_pack)
 {
+    printf("Settings:\n");
     for (const settings_group_t *gr = settings_pack; gr->label; gr++) {
         printf("gr %s\n", gr->label);
         for (setting_t *setting = gr->settings; setting->label; setting++) {
@@ -553,6 +554,9 @@ esp_err_t settings_httpd_handler(httpd_req_t *req)
             if (httpd_query_key_value(url_query, "action", value, sizeof(value)) == ESP_OK) {
                 if (!strcmp(value, "set")) {
                     set_req_handle(req);
+                } else if (!strcmp(value, "erase")) {
+                    settings_nvs_erase();
+                    settings_pack_set_defaults(settings_pack);
                 } else if (!strcmp(value, "restart")) {
                     send_json_response(js, req);
                     esp_restart();
