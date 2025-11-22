@@ -16,7 +16,7 @@ static settings_handler_t settings_handler;
 static void              *handler_arg;
 
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
-static void datetime_struct_update(setting_datetime_t *setting)
+static void datetime_gettimeofday(setting_datetime_t *setting)
 {
     time_t    t;
     struct tm lt;
@@ -32,7 +32,8 @@ static void datetime_struct_update(setting_datetime_t *setting)
     setting->date.year = lt.tm_year + 1900;
 }
 
-static int datetime_struct_set(setting_datetime_t *setting)
+/* set system date and time from setting */
+static int datetime_settimeofday(setting_datetime_t *setting)
 {
     struct tm      tm;
     struct timeval timeval;
@@ -81,7 +82,7 @@ void settings_pack_print(const settings_group_t *settings_pack)
                 printf("%02d-%02d-%04d\n", setting->date.day, setting->date.month, setting->date.year);
                 break;
             case SETTING_TYPE_DATETIME:
-                datetime_struct_update(&setting->datetime);
+                datetime_gettimeofday(&setting->datetime);
                 printf("%02d:%02d %02d-%02d-%04d\n",
                        setting->datetime.time.hh, //
                        setting->datetime.time.mm, //
@@ -135,10 +136,13 @@ void setting_set_defaults(setting_t *setting)
         break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
     case SETTING_TYPE_TIME:
+        memset(&setting->time, 0, sizeof(setting_time_t));
         break;
     case SETTING_TYPE_DATE:
+        memset(&setting->date, 0, sizeof(setting_date_t));
         break;
     case SETTING_TYPE_DATETIME:
+        datetime_gettimeofday(&setting->datetime);
         break;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
@@ -208,7 +212,7 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
                 } break;
                 case SETTING_TYPE_DATETIME:
                     /* this is current date and time on device not from nvs */
-                    datetime_struct_update(&setting->datetime);
+                    datetime_gettimeofday(&setting->datetime);
                     break;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
@@ -281,7 +285,7 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
                 } break;
                 case SETTING_TYPE_DATETIME:
                     /* set date and time on device - do not store in nvs */
-                    rc = datetime_struct_set(&setting->datetime);
+                    rc = datetime_settimeofday(&setting->datetime);
                     break;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
@@ -310,7 +314,7 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
     return ESP_OK;
 }
 
-esp_err_t settings_nvs_erase(void)
+esp_err_t settings_nvs_erase(settings_group_t *settings_pack)
 {
     nvs_handle nvs;
     esp_err_t  rc;
@@ -318,6 +322,8 @@ esp_err_t settings_nvs_erase(void)
     if (rc == ESP_OK) {
         nvs_erase_all(nvs);
         ESP_LOGW(TAG, "nvs erased");
+        if (settings_handler != NULL)
+            settings_handler(settings_pack, handler_arg);
     } else {
         ESP_LOGE(TAG, "nvs open error %s", esp_err_to_name(rc));
     }
@@ -414,7 +420,7 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
                 cJSON_AddNumberToObject(js_setting, "year", setting->date.year);
                 break;
             case SETTING_TYPE_DATETIME:
-                datetime_struct_update(&setting->datetime);
+                datetime_gettimeofday(&setting->datetime);
                 cJSON_AddNumberToObject(js_setting, "hh", setting->datetime.time.hh);
                 cJSON_AddNumberToObject(js_setting, "mm", setting->datetime.time.mm);
                 cJSON_AddNumberToObject(js_setting, "day", setting->datetime.date.day);
@@ -566,8 +572,8 @@ esp_err_t settings_httpd_handler(httpd_req_t *req)
                 if (!strcmp(value, "set")) {
                     set_req_handle(req);
                 } else if (!strcmp(value, "erase")) {
-                    settings_nvs_erase();
                     settings_pack_set_defaults(settings_pack);
+                    settings_nvs_erase(settings_pack);
                 } else if (!strcmp(value, "restart")) {
                     send_json_response(js, req);
                     esp_restart();

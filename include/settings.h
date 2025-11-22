@@ -96,10 +96,11 @@ esp_err_t settings_nvs_write(const settings_group_t *settings);
  *
  * Removes the settings namespace from NVS. Use with care — this is not
  * reversible and will remove persisted configuration.
- *
+ * 
+ * @param settings Pointer to the settings pack to populate. Must not be NULL.
  * @return esp_err_t ESP_OK on success; otherwise an error code from esp_err.h.
  */
-esp_err_t settings_nvs_erase(void);
+esp_err_t settings_nvs_erase(settings_group_t *settings);
 
 /**
  * @brief Register a settings handler callback.
