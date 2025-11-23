@@ -1,4 +1,4 @@
-version: "1.0.2"
+version: "1.0.3"
 description: "Settings component for ESP-IDF/ESP8266_RTOS_SDK"
 url: https://github.com/QB4-dev/esp-settings
 documentation: https://github.com/QB4-dev/esp-settings/blob/master/README.md
