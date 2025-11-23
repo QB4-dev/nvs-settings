@@ -144,7 +144,7 @@ Optional features are controlled by Kconfig options (configured in
 ### Using ESP Component Registry
 
 ```bash
-idf.py add-dependency "QB4-dev/esp_settings^1.0.6"
+idf.py add-dependency "QB4-dev/settings^1.0.6"
 ```
 
 ### Manual Installation
