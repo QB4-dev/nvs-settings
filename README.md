@@ -146,7 +146,7 @@ Optional features are controlled by Kconfig options (configured in
 [![Component Registry](https://components.espressif.com/components/qb4-dev/settings/badge.svg)](https://components.espressif.com/components/qb4-dev/settings)
 
 ```bash
-idf.py add-dependency "QB4-dev/settings=*"
+idf.py add-dependency "qb4-dev/settings=*"
 ```
 
 ### Manual Installation
