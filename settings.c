@@ -307,6 +307,8 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
         }
         nvs_commit(nvs);
         nvs_close(nvs);
+        if (settings_handler != NULL)
+            settings_handler(settings_pack, handler_arg);
     } else {
         ESP_LOGE(TAG, "nvs open error %s", esp_err_to_name(rc));
         return rc;
@@ -543,8 +545,6 @@ static esp_err_t set_req_handle(httpd_req_t *req)
     rc = settings_nvs_write(settings_pack);
     if (rc == 0) {
         ESP_LOGI(TAG, "nvs write OK");
-        if (settings_handler != NULL)
-            settings_handler(settings_pack, handler_arg);
         return ESP_OK;
     } else {
         ESP_LOGE(TAG, "nvs write ERR:%s(%d)", esp_err_to_name(rc), rc);
