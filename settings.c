@@ -54,6 +54,27 @@ static int datetime_settimeofday(setting_datetime_t *setting)
 }
 #endif
 
+esp_err_t settings_pack_update_nvs_ids(const settings_group_t *pack)
+{
+    char   nvs_id[128];
+    size_t id_len;
+    esp_err_t rc;
+
+    for (const settings_group_t *gr = pack; gr->id; gr++) {
+        for (setting_t *setting = gr->settings; setting->id; setting++) {
+            snprintf(nvs_id, SETTINGS_NVS_ID_LEN, "%s:%s", gr->id, setting->id);
+            id_len = strnlen(nvs_id, sizeof(nvs_id));
+            if (id_len >= NVS_KEY_NAME_MAX_SIZE - 1) {
+                ESP_LOGE(TAG, "NVS key too long (%u >= %d): %s", id_len, NVS_KEY_NAME_MAX_SIZE - 1, nvs_id);
+                rc = ESP_ERR_INVALID_ARG;
+                return rc;
+            }
+            strncpy(setting->nvs_id, nvs_id, SETTINGS_NVS_ID_LEN);
+        }
+    }
+    return ESP_OK;  
+}
+
 void settings_pack_print(const settings_group_t *settings_pack)
 {
     printf("Settings:\n");
@@ -169,7 +190,6 @@ void settings_pack_set_defaults(const settings_group_t *settings_pack)
 
 esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 {
-    char       nvs_id[128];
     nvs_handle nvs;
     esp_err_t  rc;
 
@@ -177,35 +197,36 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
     nvs_flash_init();
 
     settings_pack_set_defaults(settings_pack);
+    settings_pack_update_nvs_ids(settings_pack);
+
     rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
     if (rc == ESP_OK) {
         for (const settings_group_t *gr = settings_pack; gr->id; gr++) {
             for (setting_t *setting = gr->settings; setting->id; setting++) {
-                sprintf(nvs_id, "%s:%s", gr->id, setting->id);
                 switch (setting->type) {
                 case SETTING_TYPE_BOOL: {
-                    nvs_get_i8(nvs, nvs_id, (int8_t *)&setting->boolean.val);
+                    nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&setting->boolean.val);
                 } break;
                 case SETTING_TYPE_NUM: {
-                    nvs_get_i32(nvs, nvs_id, (int32_t *)&setting->num.val);
+                    nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&setting->num.val);
                 } break;
                 case SETTING_TYPE_ONEOF: {
-                    nvs_get_i8(nvs, nvs_id, (int8_t *)&setting->oneof.val);
+                    nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&setting->oneof.val);
                 } break;
                 case SETTING_TYPE_TEXT: {
                     size_t len = setting->text.len;
-                    nvs_get_str(nvs, nvs_id, setting->text.val, &len);
+                    nvs_get_str(nvs, setting->nvs_id, setting->text.val, &len);
                 } break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
                 case SETTING_TYPE_TIME: {
                     uint16_t val;
-                    nvs_get_u16(nvs, nvs_id, &val);
+                    nvs_get_u16(nvs, setting->nvs_id, &val);
                     setting->time.hh = (val >> 8);
                     setting->time.mm = (val & 0xFF);
                 } break;
                 case SETTING_TYPE_DATE: {
                     uint32_t val;
-                    nvs_get_u32(nvs, nvs_id, &val);
+                    nvs_get_u32(nvs, setting->nvs_id, &val);
                     setting->date.day = (val >> 24 & 0xFF);
                     setting->date.month = (val >> 16 & 0xFF);
                     setting->date.year = (val & 0xFFFF);
@@ -218,12 +239,12 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
                 case SETTING_TYPE_TIMEZONE: {
                     size_t len = setting->timezone.len;
-                    nvs_get_str(nvs, nvs_id, setting->timezone.val, &len);
+                    nvs_get_str(nvs, setting->nvs_id, setting->timezone.val, &len);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
-                    nvs_get_u32(nvs, nvs_id, &setting->color.combined);
+                    nvs_get_u32(nvs, setting->nvs_id, &setting->color.combined);
                 } break;
 #endif
                 default:
@@ -238,10 +259,8 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
     return ESP_OK;
 }
 
-static esp_err_t setting_nvs_write(setting_t *setting, const char *gr_id, nvs_handle_t nvs)
+static esp_err_t setting_nvs_write(setting_t *setting,  nvs_handle_t nvs)
 {
-    char      nvs_id[128];
-    uint8_t   id_len;
     esp_err_t rc;
 
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
@@ -250,53 +269,44 @@ static esp_err_t setting_nvs_write(setting_t *setting, const char *gr_id, nvs_ha
         return rc;
     }
 
-    snprintf(nvs_id, sizeof(nvs_id), "%s:%s", gr_id, setting->id);
-    id_len = strnlen(nvs_id, sizeof(nvs_id));
-    if (id_len >= NVS_KEY_NAME_MAX_SIZE - 1) {
-        ESP_LOGE(TAG, "NVS key too long (%u >= %d): %s", id_len, NVS_KEY_NAME_MAX_SIZE - 1, nvs_id);
-        rc = ESP_ERR_INVALID_ARG;
-        nvs_close(nvs);
-        return rc;
-    }
-
     switch (setting->type) {
     case SETTING_TYPE_BOOL:
-        rc = nvs_set_i8(nvs, nvs_id, setting->boolean.val);
+        rc = nvs_set_i8(nvs, setting->nvs_id, setting->boolean.val);
         break;
     case SETTING_TYPE_NUM:
-        rc = nvs_set_i32(nvs, nvs_id, setting->num.val);
+        rc = nvs_set_i32(nvs, setting->nvs_id, setting->num.val);
         break;
     case SETTING_TYPE_ONEOF:
-        rc = nvs_set_i8(nvs, nvs_id, setting->oneof.val);
+        rc = nvs_set_i8(nvs, setting->nvs_id, setting->oneof.val);
         break;
     case SETTING_TYPE_TEXT:
-        rc = nvs_set_str(nvs, nvs_id, setting->text.val);
+        rc = nvs_set_str(nvs, setting->nvs_id, setting->text.val);
         break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
     case SETTING_TYPE_TIME: {
         uint16_t val = (setting->time.hh << 8) | setting->time.mm;
-        rc = nvs_set_u16(nvs, nvs_id, val);
+        rc = nvs_set_u16(nvs, setting->nvs_id, val);
     } break;
     case SETTING_TYPE_DATE: {
         uint32_t val = 0;
         val |= ((uint32_t)(setting->date.day & 0xFF) << 24);
         val |= ((uint32_t)(setting->date.month & 0xFF) << 16);
         val |= ((uint32_t)(setting->date.year & 0xFFFF));
-        rc = nvs_set_u32(nvs, nvs_id, val);
+        rc = nvs_set_u32(nvs, setting->nvs_id, val);
     } break;
     case SETTING_TYPE_DATETIME:
         /* set date and time on device - do not store in nvs */
-        //  rc = datetime_settimeofday(&setting->datetime);
+        rc = datetime_settimeofday(&setting->datetime);
         break;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
     case SETTING_TYPE_TIMEZONE:
-        rc = nvs_set_str(nvs, nvs_id, setting->timezone.val);
+        rc = nvs_set_str(nvs, setting->nvs_id, setting->timezone.val);
         break;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     case SETTING_TYPE_COLOR: {
-        rc = nvs_set_u32(nvs, nvs_id, setting->color.combined);
+        rc = nvs_set_u32(nvs, setting->nvs_id, setting->color.combined);
     } break;
 #endif
     default:
@@ -306,7 +316,7 @@ static esp_err_t setting_nvs_write(setting_t *setting, const char *gr_id, nvs_ha
     return rc;
 }
 
-esp_err_t setting_nvs_write_single(setting_t *setting, const char *gr_id)
+esp_err_t setting_nvs_write_single(setting_t *setting)
 {
     nvs_handle_t nvs;
     esp_err_t    rc;
@@ -317,7 +327,7 @@ esp_err_t setting_nvs_write_single(setting_t *setting, const char *gr_id)
         return rc;
     }
 
-    rc = setting_nvs_write(setting, gr_id, nvs);
+    rc = setting_nvs_write(setting, nvs);
     if (rc != ESP_OK) {
         ESP_LOGE(TAG, "nvs set: %s", esp_err_to_name(rc));
         nvs_close(nvs);
@@ -333,11 +343,12 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
     nvs_handle nvs;
     esp_err_t  rc;
 
+    settings_pack_update_nvs_ids(settings_pack);
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
     if (rc == ESP_OK) {
         for (const settings_group_t *gr = settings_pack; gr->id; gr++) {
             for (setting_t *setting = gr->settings; setting->id; setting++) {
-                rc = setting_nvs_write(setting,gr->id,nvs);
+                rc = setting_nvs_write(setting,nvs);
                 if(rc != ESP_OK)
                     break;
             }

@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
+#define SETTINGS_NVS_ID_LEN 16
+
 typedef enum {
     SETTING_TYPE_BOOL = 0,
     SETTING_TYPE_NUM,
@@ -131,6 +133,7 @@ typedef struct {
     const char    *label; //more descriptive
     setting_type_t type;
     bool           disabled;
+    char           nvs_id[SETTINGS_NVS_ID_LEN];
     union {
         setting_bool_t  boolean;
         setting_int_t   num;

@@ -26,6 +26,18 @@
 typedef esp_err_t (*settings_handler_t)(const settings_group_t *settings, void *arg);
 
 /**
+ * @brief Update NVS IDs for all settings in the provided pack.
+ *
+ * Iterates through the provided @p pack and constructs NVS IDs for
+ * each setting in the format "group_id:setting_id", storing them
+ * in the `nvs_id` member of each `setting_t`.
+ *
+ * @param pack Pointer to the settings group to update. Must not be NULL.
+ * @return setting_t* Always returns NULL.
+ */
+esp_err_t settings_pack_update_nvs_ids(const settings_group_t *pack);
+
+/**
  * @brief Print a settings group to the console/log.
  *
  * This helper prints the contents of @p settings in a human-readable
@@ -79,6 +91,17 @@ void settings_pack_set_defaults(const settings_group_t *settings_pack);
  * @return esp_err_t ESP_OK on success; otherwise an error code from esp_err.h.
  */
 esp_err_t settings_nvs_read(const settings_group_t *settings);
+
+/**
+ * @brief Write a single setting to NVS.
+ *
+ * Persists the provided @p setting to non-volatile storage so it
+ * survives reboots.
+ *
+ * @param setting Pointer to the setting to persist. Must not be NULL.
+ * @return esp_err_t ESP_OK on success; otherwise an error code from esp_err.h.
+ */
+esp_err_t setting_nvs_write_single(setting_t *setting);
 
 /**
  * @brief Write the provided settings pack to NVS.
