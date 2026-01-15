@@ -80,10 +80,11 @@ typedef struct {
 
 
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
-/** @brief Time-of-day (hours/minutes) setting representation */
+/** @brief Time-of-day (hours/minutes/seconds) setting representation */
 typedef struct {
     int hh;
     int mm;
+    int ss;
 } setting_time_t;
 
 /** @brief Calendar date setting representation */
