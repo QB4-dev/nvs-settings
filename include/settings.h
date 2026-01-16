@@ -72,6 +72,25 @@ setting_t *settings_pack_find(const settings_group_t *settings, const char *gr, 
 void setting_set_defaults(setting_t *setting);
 
 /**
+ * @brief Update the value of setting based on its type.
+ */
+void setting_set_bool(setting_t *setting, const bool value);
+void setting_set_num(setting_t *setting, const int value);
+void setting_set_oneof(setting_t *setting, const int index);
+void setting_set_text(setting_t *setting, const char *text);
+#ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
+void setting_set_time(setting_t *setting, const setting_time_t *time);
+void setting_set_date(setting_t *setting, const setting_date_t *date);
+void setting_set_datetime(setting_t *setting, const setting_datetime_t *datetime);
+#endif
+#ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
+void setting_set_timezone(setting_t *setting, const char *timezone);
+#endif
+#ifdef CONFIG_SETTINGS_COLOR_SUPPORT
+void setting_set_color(setting_t *setting, const setting_color_t *color);
+#endif
+
+/**
  * @brief Initialize all settings in a settings pack to their defaults.
  *
  * Iterates through the settings contained in @p settings_pack and calls
@@ -129,7 +148,7 @@ esp_err_t settings_nvs_erase(settings_group_t *settings);
  * @brief Register a settings handler callback.
  *
  * The provided @p handler will be stored and invoked according to the
- * settings subsystem's semantics (e.g. on apply, on load). The @p arg is
+ * settings subsystem's semantics (e.g. on load, on erase). The @p arg is
  * forwarded to the handler when it is invoked.
  *
  * @param handler Function pointer to the handler to register. Must not be NULL.

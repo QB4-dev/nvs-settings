@@ -188,6 +188,109 @@ void settings_pack_set_defaults(const settings_group_t *settings_pack)
     }
 }
 
+void setting_set_bool(setting_t *setting, const bool value)
+{
+    setting->boolean.val = value;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+
+void setting_set_num(setting_t *setting, const int value)
+{
+    if (value < setting->num.range[0] || value > setting->num.range[1])
+        return;
+
+    setting->num.val = value;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+
+void setting_set_oneof(setting_t *setting, const int index)
+{
+    int labels_count = 0;
+    for (const char **label = setting->oneof.options; *label != NULL; label++)
+        labels_count++;
+           
+    if (index < 0 || index >= labels_count)
+        return;
+
+    setting->oneof.val = index;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+
+void setting_set_text(setting_t *setting, const char *text)
+{
+    strncpy(setting->text.val, text, setting->text.len);
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+
+#ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
+void setting_set_time(setting_t *setting, const setting_time_t *time)   
+{
+    setting->time.hh = time->hh;
+    setting->time.mm = time->mm;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+void setting_set_date(setting_t *setting, const setting_date_t *date)
+{
+    setting->date.day = date->day;
+    setting->date.month = date->month;
+    setting->date.year = date->year;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+void setting_set_datetime(setting_t *setting, const setting_datetime_t *datetime)
+{
+    setting->datetime.date.day = datetime->date.day;
+    setting->datetime.date.month = datetime->date.month;
+    setting->datetime.date.year = datetime->date.year;
+    setting->datetime.time.hh = datetime->time.hh;
+    setting->datetime.time.mm = datetime->time.mm;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+#endif
+
+#ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
+void setting_set_timezone(setting_t *setting, const char *timezone)
+{
+    strncpy(setting->timezone.val, timezone, setting->timezone.len);
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+#endif
+
+#ifdef CONFIG_SETTINGS_COLOR_SUPPORT
+void setting_set_color(setting_t *setting, const setting_color_t *color)
+{
+    setting->color = *color;
+    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if(setting->on_set_callback)
+        setting->on_set_callback(setting);
+    #endif
+}
+#endif
+
+
 esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 {
     nvs_handle nvs;
@@ -205,31 +308,48 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
             for (setting_t *setting = gr->settings; setting->id; setting++) {
                 switch (setting->type) {
                 case SETTING_TYPE_BOOL: {
-                    nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&setting->boolean.val);
+                    bool val;
+                    if(nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&val) == ESP_OK)
+                        setting_set_bool(setting, val);
                 } break;
                 case SETTING_TYPE_NUM: {
-                    nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&setting->num.val);
+                    int32_t val;
+                    if(nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&val) == ESP_OK)
+                        setting_set_num(setting, val);
                 } break;
                 case SETTING_TYPE_ONEOF: {
-                    nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&setting->oneof.val);
+                    int8_t val;
+                    if(nvs_get_i8(nvs, setting->nvs_id, &val) == ESP_OK)
+                        setting_set_oneof(setting, val);
                 } break;
                 case SETTING_TYPE_TEXT: {
+                    char buf[1024];
                     size_t len = setting->text.len;
-                    nvs_get_str(nvs, setting->nvs_id, setting->text.val, &len);
+      
+                    if(nvs_get_str(nvs, setting->nvs_id, buf, &len) == ESP_OK)
+                        setting_set_text(setting, buf);
                 } break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
                 case SETTING_TYPE_TIME: {
                     uint16_t val;
-                    nvs_get_u16(nvs, setting->nvs_id, &val);
-                    setting->time.hh = (val >> 8);
-                    setting->time.mm = (val & 0xFF);
+                    setting_time_t time;
+
+                    if(nvs_get_u16(nvs, setting->nvs_id, &val) == ESP_OK){
+                        time.hh = (val >> 8);
+                        time.mm = (val & 0xFF);
+                        setting_set_time(setting, &time);
+                    }
                 } break;
                 case SETTING_TYPE_DATE: {
                     uint32_t val;
-                    nvs_get_u32(nvs, setting->nvs_id, &val);
-                    setting->date.day = (val >> 24 & 0xFF);
-                    setting->date.month = (val >> 16 & 0xFF);
-                    setting->date.year = (val & 0xFFFF);
+                    setting_date_t date;
+
+                    if(nvs_get_u32(nvs, setting->nvs_id, &val) == ESP_OK){
+                        date.day = (val >> 24 & 0xFF);
+                        date.month = (val >> 16 & 0xFF);
+                        date.year = (val & 0xFFFF);
+                        setting_set_date(setting, &date);
+                    }
                 } break;
                 case SETTING_TYPE_DATETIME:
                     /* this is current date and time on device not from nvs */
@@ -239,12 +359,15 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
                 case SETTING_TYPE_TIMEZONE: {
                     size_t len = setting->timezone.len;
-                    nvs_get_str(nvs, setting->nvs_id, setting->timezone.val, &len);
+                    if(nvs_get_str(nvs, setting->nvs_id, setting->timezone.val, &len) == ESP_OK)
+                        setting_set_timezone(setting, setting->timezone.val);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
-                    nvs_get_u32(nvs, setting->nvs_id, &setting->color.combined);
+                    setting_color_t color;
+                    if(nvs_get_u32(nvs, setting->nvs_id, &color.combined) == ESP_OK)
+                        setting_set_color(setting, &color);
                 } break;
 #endif
                 default:
@@ -357,8 +480,6 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
             nvs_commit(nvs);
         }
         nvs_close(nvs);
-        if (settings_handler != NULL)
-            settings_handler(settings_pack, handler_arg);
     } else {
         ESP_LOGE(TAG, "nvs open error %s", esp_err_to_name(rc));
     }
@@ -464,6 +585,7 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
             case SETTING_TYPE_TIME:
                 cJSON_AddNumberToObject(js_setting, "hh", setting->time.hh);
                 cJSON_AddNumberToObject(js_setting, "mm", setting->time.mm);
+                cJSON_AddNumberToObject(js_setting, "ss", setting->time.ss);
                 break;
             case SETTING_TYPE_DATE:
                 cJSON_AddNumberToObject(js_setting, "day", setting->date.day);
@@ -474,6 +596,7 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
                 datetime_gettimeofday(&setting->datetime);
                 cJSON_AddNumberToObject(js_setting, "hh", setting->datetime.time.hh);
                 cJSON_AddNumberToObject(js_setting, "mm", setting->datetime.time.mm);
+                cJSON_AddNumberToObject(js_setting, "ss", setting->datetime.time.ss);
                 cJSON_AddNumberToObject(js_setting, "day", setting->datetime.date.day);
                 cJSON_AddNumberToObject(js_setting, "month", setting->datetime.date.month);
                 cJSON_AddNumberToObject(js_setting, "year", setting->datetime.date.year);
@@ -534,6 +657,7 @@ static esp_err_t set_req_handle(httpd_req_t *req)
         for (settings_group_t *gr = settings_pack; gr->label; gr++) {
             for (setting_t *setting = gr->settings; setting->label; setting++) {
                 sprintf(srch_id, "%s:%s", gr->id, setting->id);
+                /* Set bool settings to false by default(if false then not in request)*/
                 if (httpd_query_key_value(req_data, srch_id, value, sizeof(value)) != ESP_OK) {
                     if (setting->type == SETTING_TYPE_BOOL)
                         setting->boolean.val = false;
@@ -542,45 +666,48 @@ static esp_err_t set_req_handle(httpd_req_t *req)
 
                 switch (setting->type) {
                 case SETTING_TYPE_BOOL: {
-                    setting->boolean.val = !strcmp("on", value);
+                    setting_set_bool(setting, !strcmp("on", value));
                 } break;
                 case SETTING_TYPE_NUM: {
-                    int num_val = atoi(value);
-                    if (num_val >= setting->num.range[0] && num_val <= setting->num.range[1])
-                        setting->num.val = atoi(value);
+                    setting_set_num(setting,  atoi(value));
                 } break;
                 case SETTING_TYPE_ONEOF: {
-                    int num_val = atoi(value);
-                    int labels_count = 0;
-                    for (const char **label = setting->oneof.options; *label != NULL; label++)
-                        labels_count++;
-                    if (num_val < labels_count)
-                        setting->oneof.val = atoi(value);
+                    setting_set_oneof(setting, atoi(value));
                 } break;
                 case SETTING_TYPE_TEXT: {
-                    strncpy(setting->text.val, value, setting->text.len);
+                    setting_set_text(setting, value);
                 } break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
                 case SETTING_TYPE_TIME: {
-                    sscanf(value, "%d:%d", &setting->time.hh, &setting->time.mm);
+                    setting_time_t time;
+                    sscanf(value, "%d:%d", &time.hh, &time.mm);
+                    setting_set_time(setting, &time);
                 } break;
                 case SETTING_TYPE_DATE: {
-                    sscanf(value, "%d-%d-%d", &setting->date.year, &setting->date.month, &setting->date.day);
+                    setting_date_t date;
+                    sscanf(value, "%d-%d-%d", &date.year, &date.month, &date.day);
+                    setting_set_date(setting, &date);   
                 } break;
                 case SETTING_TYPE_DATETIME: {
-                    sscanf(value, "%d-%d-%dT%d:%d", &setting->datetime.date.year, &setting->datetime.date.month,
-                           &setting->datetime.date.day, &setting->datetime.time.hh, &setting->datetime.time.mm);
+                    setting_date_t date;
+                    setting_time_t time;
+                    setting_datetime_t combined;
 
+                    sscanf(value, "%d-%d-%dT%d:%d", &date.year, &date.month, &date.day, &time.hh, &time.mm);
+                    combined.date = date;
+                    combined.time = time;
+                    setting_set_datetime(setting, &combined);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
                 case SETTING_TYPE_TIMEZONE: {
-                    strncpy(setting->timezone.val, value, setting->timezone.len);
+                    setting_set_timezone(setting, value);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
-                    setting->color.combined = strtol(value + 1, NULL, 16);
+                    setting_color_t color = { .combined = strtol(value + 1, NULL, 16) };
+                    setting_set_color(setting, &color);
                 } break;
 #endif
                 default:
@@ -590,6 +717,9 @@ static esp_err_t set_req_handle(httpd_req_t *req)
         }
         free(req_data);
     }
+
+    if (settings_handler != NULL)
+        settings_handler(settings_pack, handler_arg);
 
     rc = settings_nvs_write(settings_pack);
     if (rc == 0) {

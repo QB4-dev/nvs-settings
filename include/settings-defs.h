@@ -12,6 +12,18 @@
 
 #define SETTINGS_NVS_ID_LEN 16
 
+/* Forward declarations */
+typedef struct setting setting_t;
+typedef struct settings_group settings_group_t;
+
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+/** @brief Callback function type for setting changes */
+typedef void (*setting_set_callback_t)(setting_t *setting);
+#endif
+
+/**
+ * @brief Supported setting data types
+ */
 typedef enum {
     SETTING_TYPE_BOOL = 0,
     SETTING_TYPE_NUM,
@@ -128,12 +140,13 @@ typedef union {
  * - `disabled`: if true, setting is not editable or exposed
  * - union: contains the typed current value and default/meta information
  */
-typedef struct {
+struct setting {
     const char    *id;    //short ID
     const char    *label; //more descriptive
     setting_type_t type;
     bool           disabled;
     char           nvs_id[SETTINGS_NVS_ID_LEN];
+    
     union {
         setting_bool_t  boolean;
         setting_int_t   num;
@@ -144,10 +157,18 @@ typedef struct {
         setting_date_t     date;
         setting_datetime_t datetime;
 #endif
+#ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
         setting_text_t  timezone;
+#endif
+#ifdef CONFIG_SETTINGS_COLOR_SUPPORT
         setting_color_t color;
+#endif
     };
-} setting_t;
+
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    setting_set_callback_t on_set_callback;    
+#endif
+};
 
 /**
  * @brief Group descriptor for a collection of settings
@@ -156,7 +177,7 @@ typedef struct {
  * an `id` and `label` useful for UI presentation or hierarchical
  * persistence namespaces.
  */
-typedef struct {
+typedef struct settings_group {
     const char *id;    //short ID
     const char *label; //more descriptive
     setting_t  *settings;
