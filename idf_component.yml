@@ -6,7 +6,7 @@ documentation: https://github.com/QB4-dev/nvs-settings/README.md
 issues: https://github.com/QB4-dev/nvs-settings/issues
 license: MIT
 examples:
-  - path: examples/defaults
+  - path: examples/default
 tags:
   - settings
   - nvs
