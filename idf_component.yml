@@ -2,7 +2,7 @@ version: 1.0.14
 description: Settings component for ESP-IDF/ESP8266_RTOS_SDK
 repository: https://github.com/QB4-dev/nvs-settings
 url: https://github.com/QB4-dev/nvs-settings
-documentation: https://github.com/QB4-dev/nvs-settings/README.md
+documentation: https://github.com/QB4-dev/nvs-settings/blob/master/README.md
 issues: https://github.com/QB4-dev/nvs-settings/issues
 license: MIT
 examples:
