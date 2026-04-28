@@ -56,13 +56,13 @@ static int datetime_settimeofday(setting_datetime_t *setting)
 
 esp_err_t settings_pack_update_nvs_ids(const settings_group_t *pack)
 {
-    char   nvs_id[128];
+    char   nvs_id[SETTINGS_NVS_ID_LEN];
     size_t id_len;
     esp_err_t rc;
 
     for (const settings_group_t *gr = pack; gr->id; gr++) {
         for (setting_t *setting = gr->settings; setting->id; setting++) {
-            snprintf(nvs_id, SETTINGS_NVS_ID_LEN, "%s:%s", gr->id, setting->id);
+            snprintf(nvs_id, sizeof(nvs_id), "%s:%s", gr->id, setting->id);
             id_len = strnlen(nvs_id, sizeof(nvs_id));
             if (id_len >= NVS_KEY_NAME_MAX_SIZE - 1) {
                 ESP_LOGE(TAG, "NVS key too long (%u >= %d): %s", id_len, NVS_KEY_NAME_MAX_SIZE - 1, nvs_id);
@@ -227,7 +227,15 @@ void setting_set_oneof(setting_t *setting, const int index)
 
 void setting_set_text(setting_t *setting, const char *text)
 {
-    strncpy(setting->text.val, text, setting->text.len);
+    if (setting->text.val && setting->text.len > 0) {
+        if (text) {
+            size_t copy_len = strnlen(text, setting->text.len - 1);
+            memmove(setting->text.val, text, copy_len);
+            setting->text.val[copy_len] = '\0';
+        } else {
+            setting->text.val[0] = '\0';
+        }
+    }
     #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
     if(setting->on_set_callback)
         setting->on_set_callback(setting);
@@ -271,7 +279,15 @@ void setting_set_datetime(setting_t *setting, const setting_datetime_t *datetime
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
 void setting_set_timezone(setting_t *setting, const char *timezone)
 {
-    strncpy(setting->timezone.val, timezone, setting->timezone.len);
+    if (setting->timezone.val && setting->timezone.len > 0) {
+        if (timezone) {
+            size_t copy_len = strnlen(timezone, setting->timezone.len - 1);
+            memmove(setting->timezone.val, timezone, copy_len);
+            setting->timezone.val[copy_len] = '\0';
+        } else {
+            setting->timezone.val[0] = '\0';
+        }
+    }
     #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
     if(setting->on_set_callback)
         setting->on_set_callback(setting);
