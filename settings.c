@@ -15,6 +15,58 @@ static const char *NVS_STORAGE = "settings_nvs";
 static settings_handler_t settings_handler;
 static void              *handler_arg;
 
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+typedef struct {
+    uint8_t  dhcp;
+    uint8_t  reserved[3];
+    uint32_t ip;
+    uint32_t netmask;
+    uint32_t gateway;
+} setting_netif_blob_t;
+
+static void setting_ipaddr_to_string(const setting_ipaddr_t *ipaddr, char *buf, size_t buf_len)
+{
+    snprintf(buf, buf_len, "%" PRIu8 ".%" PRIu8 ".%" PRIu8 ".%" PRIu8, ipaddr->octets[0], ipaddr->octets[1],
+             ipaddr->octets[2], ipaddr->octets[3]);
+}
+
+static bool setting_ipaddr_from_string(const char *text, setting_ipaddr_t *ipaddr)
+{
+    unsigned int octets[4];
+
+    if (!text || !ipaddr)
+        return false;
+
+    if (sscanf(text, "%u.%u.%u.%u", &octets[0], &octets[1], &octets[2], &octets[3]) != 4)
+        return false;
+
+    for (size_t index = 0; index < 4; index++) {
+        if (octets[index] > 255)
+            return false;
+        ipaddr->octets[index] = (uint8_t)octets[index];
+    }
+
+    return true;
+}
+
+static void setting_netif_to_blob(const setting_netif_t *netif, setting_netif_blob_t *blob)
+{
+    memset(blob, 0, sizeof(*blob));
+    blob->dhcp = netif->dhcp;
+    blob->ip = netif->ip.addr;
+    blob->netmask = netif->netmask.addr;
+    blob->gateway = netif->gateway.addr;
+}
+
+static void setting_netif_from_blob(setting_netif_t *netif, const setting_netif_blob_t *blob)
+{
+    netif->dhcp = blob->dhcp;
+    netif->ip.addr = blob->ip;
+    netif->netmask.addr = blob->netmask;
+    netif->gateway.addr = blob->gateway;
+}
+#endif
+
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
 static void datetime_gettimeofday(setting_datetime_t *setting)
 {
@@ -56,8 +108,8 @@ static int datetime_settimeofday(setting_datetime_t *setting)
 
 esp_err_t settings_pack_update_nvs_ids(const settings_group_t *pack)
 {
-    char   nvs_id[SETTINGS_NVS_ID_LEN];
-    size_t id_len;
+    char      nvs_id[SETTINGS_NVS_ID_LEN];
+    size_t    id_len;
     esp_err_t rc;
 
     for (const settings_group_t *gr = pack; gr->id; gr++) {
@@ -72,7 +124,7 @@ esp_err_t settings_pack_update_nvs_ids(const settings_group_t *pack)
             strncpy(setting->nvs_id, nvs_id, SETTINGS_NVS_ID_LEN);
         }
     }
-    return ESP_OK;  
+    return ESP_OK;
 }
 
 void settings_pack_print(const settings_group_t *settings_pack)
@@ -119,6 +171,24 @@ void settings_pack_print(const settings_group_t *settings_pack)
             case SETTING_TYPE_COLOR:
                 printf("#%02x%02x%02x\n", setting->color.r, setting->color.g, setting->color.b);
                 break;
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+            case SETTING_TYPE_IPADDR: {
+                char buf[16];
+
+                setting_ipaddr_to_string(&setting->ipaddr, buf, sizeof(buf));
+                printf("%s\n", buf);
+            } break;
+            case SETTING_TYPE_NETIF: {
+                char ip[16];
+                char netmask[16];
+                char gateway[16];
+
+                setting_ipaddr_to_string(&setting->netif.ip, ip, sizeof(ip));
+                setting_ipaddr_to_string(&setting->netif.netmask, netmask, sizeof(netmask));
+                setting_ipaddr_to_string(&setting->netif.gateway, gateway, sizeof(gateway));
+                printf("dhcp=%s ip=%s mask=%s gw=%s\n", setting->netif.dhcp ? "true" : "false", ip, netmask, gateway);
+            } break;
 #endif
             default:
                 break;
@@ -173,6 +243,20 @@ void setting_set_defaults(setting_t *setting)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     case SETTING_TYPE_COLOR:
+        setting->color.r = 0xFF;
+        setting->color.g = 0xFF;
+        setting->color.b = 0xFF;
+        setting->color.w = 0x00;
+        break;
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+    case SETTING_TYPE_IPADDR:
+        setting->ipaddr = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
+        break;
+    case SETTING_TYPE_NETIF:
+        setting->netif.ip = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
+        setting->netif.netmask = (setting_ipaddr_t){ .octets = { 255, 255, 255, 0 } };
+        setting->netif.gateway = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
         break;
 #endif
     default:
@@ -191,10 +275,10 @@ void settings_pack_set_defaults(const settings_group_t *settings_pack)
 void setting_set_bool(setting_t *setting, const bool value)
 {
     setting->boolean.val = value;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 
 void setting_set_num(setting_t *setting, const int value)
@@ -203,10 +287,10 @@ void setting_set_num(setting_t *setting, const int value)
         return;
 
     setting->num.val = value;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 
 void setting_set_oneof(setting_t *setting, const int index)
@@ -214,15 +298,15 @@ void setting_set_oneof(setting_t *setting, const int index)
     int labels_count = 0;
     for (const char **label = setting->oneof.options; *label != NULL; label++)
         labels_count++;
-           
+
     if (index < 0 || index >= labels_count)
         return;
 
     setting->oneof.val = index;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 
 void setting_set_text(setting_t *setting, const char *text)
@@ -236,31 +320,31 @@ void setting_set_text(setting_t *setting, const char *text)
             setting->text.val[0] = '\0';
         }
     }
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
-void setting_set_time(setting_t *setting, const setting_time_t *time)   
+void setting_set_time(setting_t *setting, const setting_time_t *time)
 {
     setting->time.hh = time->hh;
     setting->time.mm = time->mm;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 void setting_set_date(setting_t *setting, const setting_date_t *date)
 {
     setting->date.day = date->day;
     setting->date.month = date->month;
     setting->date.year = date->year;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 void setting_set_datetime(setting_t *setting, const setting_datetime_t *datetime)
 {
@@ -269,10 +353,10 @@ void setting_set_datetime(setting_t *setting, const setting_datetime_t *datetime
     setting->datetime.date.year = datetime->date.year;
     setting->datetime.time.hh = datetime->time.hh;
     setting->datetime.time.mm = datetime->time.mm;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 #endif
 
@@ -288,10 +372,10 @@ void setting_set_timezone(setting_t *setting, const char *timezone)
             setting->timezone.val[0] = '\0';
         }
     }
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 #endif
 
@@ -299,13 +383,33 @@ void setting_set_timezone(setting_t *setting, const char *timezone)
 void setting_set_color(setting_t *setting, const setting_color_t *color)
 {
     setting->color = *color;
-    #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    if(setting->on_set_callback)
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
         setting->on_set_callback(setting);
-    #endif
+#endif
 }
 #endif
 
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+void setting_set_ipaddr(setting_t *setting, const setting_ipaddr_t *ipaddr)
+{
+    setting->ipaddr = *ipaddr;
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
+        setting->on_set_callback(setting);
+#endif
+}
+
+void setting_set_netif(setting_t *setting, const setting_netif_t *netif)
+{
+    setting->netif = *netif;
+
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
+        setting->on_set_callback(setting);
+#endif
+}
+#endif
 
 esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 {
@@ -325,42 +429,42 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
                 switch (setting->type) {
                 case SETTING_TYPE_BOOL: {
                     bool val;
-                    if(nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&val) == ESP_OK)
+                    if (nvs_get_i8(nvs, setting->nvs_id, (int8_t *)&val) == ESP_OK)
                         setting_set_bool(setting, val);
                 } break;
                 case SETTING_TYPE_NUM: {
                     int32_t val;
-                    if(nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&val) == ESP_OK)
+                    if (nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&val) == ESP_OK)
                         setting_set_num(setting, val);
                 } break;
                 case SETTING_TYPE_ONEOF: {
                     int8_t val;
-                    if(nvs_get_i8(nvs, setting->nvs_id, &val) == ESP_OK)
+                    if (nvs_get_i8(nvs, setting->nvs_id, &val) == ESP_OK)
                         setting_set_oneof(setting, val);
                 } break;
                 case SETTING_TYPE_TEXT: {
-                    char buf[1024];
+                    char   buf[1024];
                     size_t len = setting->text.len;
-      
-                    if(nvs_get_str(nvs, setting->nvs_id, buf, &len) == ESP_OK)
+
+                    if (nvs_get_str(nvs, setting->nvs_id, buf, &len) == ESP_OK)
                         setting_set_text(setting, buf);
                 } break;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
                 case SETTING_TYPE_TIME: {
-                    uint16_t val;
+                    uint16_t       val;
                     setting_time_t time;
 
-                    if(nvs_get_u16(nvs, setting->nvs_id, &val) == ESP_OK){
+                    if (nvs_get_u16(nvs, setting->nvs_id, &val) == ESP_OK) {
                         time.hh = (val >> 8);
                         time.mm = (val & 0xFF);
                         setting_set_time(setting, &time);
                     }
                 } break;
                 case SETTING_TYPE_DATE: {
-                    uint32_t val;
+                    uint32_t       val;
                     setting_date_t date;
 
-                    if(nvs_get_u32(nvs, setting->nvs_id, &val) == ESP_OK){
+                    if (nvs_get_u32(nvs, setting->nvs_id, &val) == ESP_OK) {
                         date.day = (val >> 24 & 0xFF);
                         date.month = (val >> 16 & 0xFF);
                         date.year = (val & 0xFFFF);
@@ -375,15 +479,33 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
                 case SETTING_TYPE_TIMEZONE: {
                     size_t len = setting->timezone.len;
-                    if(nvs_get_str(nvs, setting->nvs_id, setting->timezone.val, &len) == ESP_OK)
+                    if (nvs_get_str(nvs, setting->nvs_id, setting->timezone.val, &len) == ESP_OK)
                         setting_set_timezone(setting, setting->timezone.val);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
                     setting_color_t color;
-                    if(nvs_get_u32(nvs, setting->nvs_id, &color.combined) == ESP_OK)
+                    if (nvs_get_u32(nvs, setting->nvs_id, &color.combined) == ESP_OK)
                         setting_set_color(setting, &color);
+                } break;
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+                case SETTING_TYPE_IPADDR: {
+                    setting_ipaddr_t ipaddr;
+
+                    if (nvs_get_u32(nvs, setting->nvs_id, &ipaddr.addr) == ESP_OK)
+                        setting_set_ipaddr(setting, &ipaddr);
+                } break;
+                case SETTING_TYPE_NETIF: {
+                    size_t               blob_len = sizeof(setting_netif_blob_t);
+                    setting_netif_blob_t blob;
+                    setting_netif_t      netif = setting->netif;
+
+                    if (nvs_get_blob(nvs, setting->nvs_id, &blob, &blob_len) == ESP_OK && blob_len == sizeof(blob)) {
+                        setting_netif_from_blob(&netif, &blob);
+                        setting_set_netif(setting, &netif);
+                    }
                 } break;
 #endif
                 default:
@@ -398,7 +520,7 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
     return ESP_OK;
 }
 
-static esp_err_t setting_nvs_write(setting_t *setting,  nvs_handle_t nvs)
+static esp_err_t setting_nvs_write(setting_t *setting, nvs_handle_t nvs)
 {
     esp_err_t rc;
 
@@ -448,6 +570,17 @@ static esp_err_t setting_nvs_write(setting_t *setting,  nvs_handle_t nvs)
         rc = nvs_set_u32(nvs, setting->nvs_id, setting->color.combined);
     } break;
 #endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+    case SETTING_TYPE_IPADDR:
+        rc = nvs_set_u32(nvs, setting->nvs_id, setting->ipaddr.addr);
+        break;
+    case SETTING_TYPE_NETIF: {
+        setting_netif_blob_t blob;
+
+        setting_netif_to_blob(&setting->netif, &blob);
+        rc = nvs_set_blob(nvs, setting->nvs_id, &blob, sizeof(blob));
+    } break;
+#endif
     default:
         rc = ESP_ERR_NOT_SUPPORTED;
         break;
@@ -487,12 +620,12 @@ esp_err_t settings_nvs_write(const settings_group_t *settings_pack)
     if (rc == ESP_OK) {
         for (const settings_group_t *gr = settings_pack; gr->id; gr++) {
             for (setting_t *setting = gr->settings; setting->id; setting++) {
-                rc = setting_nvs_write(setting,nvs);
-                if(rc != ESP_OK)
+                rc = setting_nvs_write(setting, nvs);
+                if (rc != ESP_OK)
                     break;
             }
         }
-        if(rc == ESP_OK){
+        if (rc == ESP_OK) {
             nvs_commit(nvs);
         }
         nvs_close(nvs);
@@ -546,16 +679,19 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
     cJSON *js;
 
     const char *types[] = {
-        [SETTING_TYPE_BOOL] = "BOOL",         [SETTING_TYPE_NUM] = "NUM",   [SETTING_TYPE_ONEOF] = "ONEOF",
+        [SETTING_TYPE_BOOL] = "BOOL",         [SETTING_TYPE_NUM] = "NUM",     [SETTING_TYPE_ONEOF] = "ONEOF",
         [SETTING_TYPE_TEXT] = "TEXT",
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
-        [SETTING_TYPE_TIME] = "TIME",         [SETTING_TYPE_DATE] = "DATE", [SETTING_TYPE_DATETIME] = "DATETIME",
+        [SETTING_TYPE_TIME] = "TIME",         [SETTING_TYPE_DATE] = "DATE",   [SETTING_TYPE_DATETIME] = "DATETIME",
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
         [SETTING_TYPE_TIMEZONE] = "TIMEZONE",
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
         [SETTING_TYPE_COLOR] = "COLOR",
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+        [SETTING_TYPE_IPADDR] = "IPADDR",     [SETTING_TYPE_NETIF] = "NETIF",
 #endif
     };
 
@@ -632,6 +768,27 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
                 cJSON_AddStringToObject(js_setting, "val", buf);
             } break;
 #endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+            case SETTING_TYPE_IPADDR: {
+                char buf[16];
+
+                setting_ipaddr_to_string(&setting->ipaddr, buf, sizeof(buf));
+                cJSON_AddStringToObject(js_setting, "val", buf);
+            } break;
+            case SETTING_TYPE_NETIF: {
+                char ip[16];
+                char netmask[16];
+                char gateway[16];
+
+                setting_ipaddr_to_string(&setting->netif.ip, ip, sizeof(ip));
+                setting_ipaddr_to_string(&setting->netif.netmask, netmask, sizeof(netmask));
+                setting_ipaddr_to_string(&setting->netif.gateway, gateway, sizeof(gateway));
+                cJSON_AddBoolToObject(js_setting, "dhcp", setting->netif.dhcp);
+                cJSON_AddStringToObject(js_setting, "ip", ip);
+                cJSON_AddStringToObject(js_setting, "netmask", netmask);
+                cJSON_AddStringToObject(js_setting, "gateway", gateway);
+            } break;
+#endif
             default:
                 break;
             }
@@ -673,6 +830,43 @@ static esp_err_t set_req_handle(httpd_req_t *req)
         for (settings_group_t *gr = settings_pack; gr->label; gr++) {
             for (setting_t *setting = gr->settings; setting->label; setting++) {
                 sprintf(srch_id, "%s:%s", gr->id, setting->id);
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+                if (setting->type == SETTING_TYPE_NETIF) {
+                    char             req_key[160];
+                    setting_netif_t  netif = setting->netif;
+                    bool             has_value = false;
+                    setting_ipaddr_t ipaddr;
+
+                    snprintf(req_key, sizeof(req_key), "%s:dhcp", srch_id);
+                    netif.dhcp = httpd_query_key_value(req_data, req_key, value, sizeof(value)) == ESP_OK &&
+                                 !strcmp("on", value);
+
+                    snprintf(req_key, sizeof(req_key), "%s:ip", srch_id);
+                    if (httpd_query_key_value(req_data, req_key, value, sizeof(value)) == ESP_OK) {
+                        has_value = true;
+                        if (setting_ipaddr_from_string(value, &ipaddr))
+                            netif.ip = ipaddr;
+                    }
+
+                    snprintf(req_key, sizeof(req_key), "%s:netmask", srch_id);
+                    if (httpd_query_key_value(req_data, req_key, value, sizeof(value)) == ESP_OK) {
+                        has_value = true;
+                        if (setting_ipaddr_from_string(value, &ipaddr))
+                            netif.netmask = ipaddr;
+                    }
+
+                    snprintf(req_key, sizeof(req_key), "%s:gateway", srch_id);
+                    if (httpd_query_key_value(req_data, req_key, value, sizeof(value)) == ESP_OK) {
+                        has_value = true;
+                        if (setting_ipaddr_from_string(value, &ipaddr))
+                            netif.gateway = ipaddr;
+                    }
+
+                    if (has_value || netif.dhcp != setting->netif.dhcp)
+                        setting_set_netif(setting, &netif);
+                    continue;
+                }
+#endif
                 /* Set bool settings to false by default(if false then not in request)*/
                 if (httpd_query_key_value(req_data, srch_id, value, sizeof(value)) != ESP_OK) {
                     if (setting->type == SETTING_TYPE_BOOL)
@@ -685,7 +879,7 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                     setting_set_bool(setting, !strcmp("on", value));
                 } break;
                 case SETTING_TYPE_NUM: {
-                    setting_set_num(setting,  atoi(value));
+                    setting_set_num(setting, atoi(value));
                 } break;
                 case SETTING_TYPE_ONEOF: {
                     setting_set_oneof(setting, atoi(value));
@@ -702,11 +896,11 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                 case SETTING_TYPE_DATE: {
                     setting_date_t date;
                     sscanf(value, "%d-%d-%d", &date.year, &date.month, &date.day);
-                    setting_set_date(setting, &date);   
+                    setting_set_date(setting, &date);
                 } break;
                 case SETTING_TYPE_DATETIME: {
-                    setting_date_t date;
-                    setting_time_t time;
+                    setting_date_t     date;
+                    setting_time_t     time;
                     setting_datetime_t combined;
 
                     sscanf(value, "%d-%d-%dT%d:%d", &date.year, &date.month, &date.day, &time.hh, &time.mm);
@@ -724,6 +918,14 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                 case SETTING_TYPE_COLOR: {
                     setting_color_t color = { .combined = strtol(value + 1, NULL, 16) };
                     setting_set_color(setting, &color);
+                } break;
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+                case SETTING_TYPE_IPADDR: {
+                    setting_ipaddr_t ipaddr;
+
+                    if (setting_ipaddr_from_string(value, &ipaddr))
+                        setting_set_ipaddr(setting, &ipaddr);
                 } break;
 #endif
                 default:

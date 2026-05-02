@@ -11,6 +11,10 @@ menu "NVS Settings config"
     config SETTINGS_COLOR_SUPPORT
         bool "Support color settings"
         default y
+
+    config SETTINGS_NET_SUPPORT
+        bool "Support network settings"
+        default y
     
     config SETTINGS_CALLBACK_SUPPORT
         bool "Support callbacks for settings"

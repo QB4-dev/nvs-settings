@@ -89,6 +89,16 @@ function getSettingsForm(){
 					case "COLOR":
 						html+=`<span class="label-inline">${item.label}</span><input type="color" name="${gr.id}:${item.id}" value="${item.val}" style="width:50px"/><br>`;
 						break;
+					case "IPADDR":
+						html+=`<span class="label-inline">${item.label}</span><input type="text" name="${gr.id}:${item.id}" value="${item.val}" inputmode="decimal" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$" placeholder="192.168.1.10" style="width:250px"><br>`;
+						break;
+					case "NETIF":
+						html+=`<div style="margin-bottom:12px"><span class="label-inline">${item.label}</span><br>`;
+						html+=`<label><input type="checkbox" name="${gr.id}:${item.id}:dhcp" ${item.dhcp?"checked":''}> DHCP</label><br>`;
+						html+=`<span class="label-inline">IP address</span><input type="text" name="${gr.id}:${item.id}:ip" value="${item.ip}" inputmode="decimal" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$" placeholder="192.168.1.10" style="width:250px"><br>`;
+						html+=`<span class="label-inline">Netmask</span><input type="text" name="${gr.id}:${item.id}:netmask" value="${item.netmask}" inputmode="decimal" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$" placeholder="255.255.255.0" style="width:250px"><br>`;
+						html+=`<span class="label-inline">Gateway</span><input type="text" name="${gr.id}:${item.id}:gateway" value="${item.gateway}" inputmode="decimal" pattern="^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$" placeholder="192.168.1.1" style="width:250px"><br></div>`;
+						break;
 					default:
 						break;
 				}

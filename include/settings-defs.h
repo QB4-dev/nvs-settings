@@ -13,7 +13,7 @@
 #define SETTINGS_NVS_ID_LEN 16
 
 /* Forward declarations */
-typedef struct setting setting_t;
+typedef struct setting        setting_t;
 typedef struct settings_group settings_group_t;
 
 #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
@@ -41,6 +41,10 @@ typedef enum {
 
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     SETTING_TYPE_COLOR,
+#endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+    SETTING_TYPE_IPADDR,
+    SETTING_TYPE_NETIF,
 #endif
 } setting_type_t;
 
@@ -92,7 +96,6 @@ typedef struct {
     size_t      len;
 } setting_text_t;
 
-
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
 /** @brief Time-of-day (hours/minutes/seconds) setting representation */
 typedef struct {
@@ -131,6 +134,20 @@ typedef union {
     uint32_t combined;
 } setting_color_t;
 
+/** @brief IPv4 address setting representation */
+typedef union {
+    uint8_t  octets[4];
+    uint32_t addr;
+} setting_ipaddr_t;
+
+/** @brief Network interface setting representation */
+typedef struct {
+    bool             dhcp;
+    setting_ipaddr_t ip;
+    setting_ipaddr_t netmask;
+    setting_ipaddr_t gateway;
+} setting_netif_t;
+
 /**
  * @brief Descriptor for a single setting entry
  *
@@ -146,7 +163,7 @@ struct setting {
     setting_type_t type;
     bool           disabled;
     char           nvs_id[SETTINGS_NVS_ID_LEN];
-    
+
     union {
         setting_bool_t  boolean;
         setting_int_t   num;
@@ -158,15 +175,20 @@ struct setting {
         setting_datetime_t datetime;
 #endif
 #ifdef CONFIG_SETTINGS_TIMEZONE_SUPPORT
-        setting_text_t  timezone;
+        setting_text_t timezone;
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
         setting_color_t color;
 #endif
+
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+        setting_ipaddr_t ipaddr;
+        setting_netif_t  netif;
+#endif
     };
 
 #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
-    setting_set_callback_t on_set_callback;    
+    setting_set_callback_t on_set_callback;
 #endif
 };
 

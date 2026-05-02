@@ -111,6 +111,18 @@ static setting_t network_settings_items[] = {
       .type = SETTING_TYPE_ONEOF,
       .oneof = { .val = 2, .def = 2, .options = wifi_mode_opts } },
 
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+    { .id = "DNS", .label = "DNS server", .type = SETTING_TYPE_IPADDR, .ipaddr = { .octets = { 1, 1, 1, 1 } } },
+
+    { .id = "LAN",
+      .label = "LAN interface",
+      .type = SETTING_TYPE_NETIF,
+      .netif = { .dhcp = true,
+                 .ip = { .octets = { 192, 168, 4, 1 } },
+                 .netmask = { .octets = { 255, 255, 255, 0 } },
+                 .gateway = { .octets = { 192, 168, 4, 1 } } } },
+#endif
+
 /*
      * Date / Time settings - useful for manual time tuning or schedule testing.
      * These fields are optional depending on compile-time support in settings-defs.

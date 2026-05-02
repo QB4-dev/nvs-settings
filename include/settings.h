@@ -89,6 +89,10 @@ void setting_set_timezone(setting_t *setting, const char *timezone);
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
 void setting_set_color(setting_t *setting, const setting_color_t *color);
 #endif
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+void setting_set_ipaddr(setting_t *setting, const setting_ipaddr_t *ipaddr);
+void setting_set_netif(setting_t *setting, const setting_netif_t *netif);
+#endif
 
 /**
  * @brief Initialize all settings in a settings pack to their defaults.
