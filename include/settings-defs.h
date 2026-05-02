@@ -132,20 +132,38 @@ typedef union {
         unsigned char w;
     };
     uint32_t combined;
-} setting_color_t;
+} color_t;
 
 /** @brief IPv4 address setting representation */
 typedef union {
     uint8_t  octets[4];
     uint32_t addr;
-} setting_ipaddr_t;
+} ipaddr_t;
 
 /** @brief Network interface setting representation */
 typedef struct {
-    bool             dhcp;
-    setting_ipaddr_t ip;
-    setting_ipaddr_t netmask;
-    setting_ipaddr_t gateway;
+    bool     dhcp;
+    ipaddr_t ip;
+    ipaddr_t netmask;
+    ipaddr_t gateway;
+} netif_conf_t;
+
+/** @brief Color setting with current and default values */
+typedef struct {
+    color_t val;
+    color_t def;
+} setting_color_t;
+
+/** @brief IPv4 setting with current and default values */
+typedef struct {
+    ipaddr_t val;
+    ipaddr_t def;
+} setting_ipaddr_t;
+
+/** @brief Network interface setting with current and default values */
+typedef struct {
+    netif_conf_t val;
+    netif_conf_t def;
 } setting_netif_t;
 
 /**

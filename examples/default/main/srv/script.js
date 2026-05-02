@@ -11,9 +11,11 @@ function tab(e, id) {
 
 function defaults(e) {
     if (confirm("Do you want to revert default settings?") == true) {
-	    fetch(esp_url+"/settings?action=erase");
-		getSettingsForm();
-	    alert("Board settings reset to defaults");
+	    fetch(esp_url+"/settings?action=erase")
+	    .then(() => {
+		    alert("Board settings reset to defaults");
+		    window.location.reload();
+	    });
     }
 }
 
@@ -23,6 +25,28 @@ function reset(e) {
 	    alert("Board reset - disconnected");
     }
 }
+
+function setupNetifDhcpToggles() {
+	const netifCheckboxes = document.querySelectorAll('input[type="checkbox"][name$=":dhcp"]');
+
+	netifCheckboxes.forEach((dhcpCheckbox) => {
+		const baseName = dhcpCheckbox.name.slice(0, -5);
+		const ipInput = document.querySelector(`input[name="${baseName}:ip"]`);
+		const netmaskInput = document.querySelector(`input[name="${baseName}:netmask"]`);
+		const gatewayInput = document.querySelector(`input[name="${baseName}:gateway"]`);
+		const netifInputs = [ipInput, netmaskInput, gatewayInput].filter(Boolean);
+
+		const updateDisabledState = () => {
+			netifInputs.forEach((input) => {
+				input.disabled = dhcpCheckbox.checked;
+			});
+		};
+
+		dhcpCheckbox.addEventListener("change", updateDisabledState);
+		updateDisabledState();
+	});
+}
+
 function getSettingsForm(){
 	const tzlist = [
 		"Europe/London",
@@ -111,6 +135,7 @@ function getSettingsForm(){
 		html+=`<button onclick='reset()'>RESTART</button>`;
 
 		div.innerHTML = html;
+		setupNetifDhcpToggles();
 		const form = document.getElementById('brd-form');
 		form.onsubmit = function(e){
 			e.preventDefault();

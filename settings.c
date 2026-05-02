@@ -24,13 +24,13 @@ typedef struct {
     uint32_t gateway;
 } setting_netif_blob_t;
 
-static void setting_ipaddr_to_string(const setting_ipaddr_t *ipaddr, char *buf, size_t buf_len)
+static void setting_ipaddr_to_string(const ipaddr_t *ipaddr, char *buf, size_t buf_len)
 {
     snprintf(buf, buf_len, "%" PRIu8 ".%" PRIu8 ".%" PRIu8 ".%" PRIu8, ipaddr->octets[0], ipaddr->octets[1],
              ipaddr->octets[2], ipaddr->octets[3]);
 }
 
-static bool setting_ipaddr_from_string(const char *text, setting_ipaddr_t *ipaddr)
+static bool setting_ipaddr_from_string(const char *text, ipaddr_t *ipaddr)
 {
     unsigned int octets[4];
 
@@ -49,7 +49,7 @@ static bool setting_ipaddr_from_string(const char *text, setting_ipaddr_t *ipadd
     return true;
 }
 
-static void setting_netif_to_blob(const setting_netif_t *netif, setting_netif_blob_t *blob)
+static void setting_netif_to_blob(const netif_conf_t *netif, setting_netif_blob_t *blob)
 {
     memset(blob, 0, sizeof(*blob));
     blob->dhcp = netif->dhcp;
@@ -58,7 +58,7 @@ static void setting_netif_to_blob(const setting_netif_t *netif, setting_netif_bl
     blob->gateway = netif->gateway.addr;
 }
 
-static void setting_netif_from_blob(setting_netif_t *netif, const setting_netif_blob_t *blob)
+static void setting_netif_from_blob(netif_conf_t *netif, const setting_netif_blob_t *blob)
 {
     netif->dhcp = blob->dhcp;
     netif->ip.addr = blob->ip;
@@ -169,14 +169,14 @@ void settings_pack_print(const settings_group_t *settings_pack)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
             case SETTING_TYPE_COLOR:
-                printf("#%02x%02x%02x\n", setting->color.r, setting->color.g, setting->color.b);
+                printf("#%02x%02x%02x\n", setting->color.val.r, setting->color.val.g, setting->color.val.b);
                 break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
             case SETTING_TYPE_IPADDR: {
                 char buf[16];
 
-                setting_ipaddr_to_string(&setting->ipaddr, buf, sizeof(buf));
+                setting_ipaddr_to_string(&setting->ipaddr.val, buf, sizeof(buf));
                 printf("%s\n", buf);
             } break;
             case SETTING_TYPE_NETIF: {
@@ -184,10 +184,11 @@ void settings_pack_print(const settings_group_t *settings_pack)
                 char netmask[16];
                 char gateway[16];
 
-                setting_ipaddr_to_string(&setting->netif.ip, ip, sizeof(ip));
-                setting_ipaddr_to_string(&setting->netif.netmask, netmask, sizeof(netmask));
-                setting_ipaddr_to_string(&setting->netif.gateway, gateway, sizeof(gateway));
-                printf("dhcp=%s ip=%s mask=%s gw=%s\n", setting->netif.dhcp ? "true" : "false", ip, netmask, gateway);
+                setting_ipaddr_to_string(&setting->netif.val.ip, ip, sizeof(ip));
+                setting_ipaddr_to_string(&setting->netif.val.netmask, netmask, sizeof(netmask));
+                setting_ipaddr_to_string(&setting->netif.val.gateway, gateway, sizeof(gateway));
+                printf("dhcp=%s ip=%s mask=%s gw=%s\n", setting->netif.val.dhcp ? "true" : "false", ip, netmask,
+                       gateway);
             } break;
 #endif
             default:
@@ -243,20 +244,15 @@ void setting_set_defaults(setting_t *setting)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     case SETTING_TYPE_COLOR:
-        setting->color.r = 0xFF;
-        setting->color.g = 0xFF;
-        setting->color.b = 0xFF;
-        setting->color.w = 0x00;
+        setting->color.val = setting->color.def;
         break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
     case SETTING_TYPE_IPADDR:
-        setting->ipaddr = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
+        setting->ipaddr.val = setting->ipaddr.def;
         break;
     case SETTING_TYPE_NETIF:
-        setting->netif.ip = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
-        setting->netif.netmask = (setting_ipaddr_t){ .octets = { 255, 255, 255, 0 } };
-        setting->netif.gateway = (setting_ipaddr_t){ .octets = { 192, 168, 4, 1 } };
+        setting->netif.val = setting->netif.def;
         break;
 #endif
     default:
@@ -380,9 +376,9 @@ void setting_set_timezone(setting_t *setting, const char *timezone)
 #endif
 
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
-void setting_set_color(setting_t *setting, const setting_color_t *color)
+void setting_set_color(setting_t *setting, const color_t *color)
 {
-    setting->color = *color;
+    setting->color.val = *color;
 #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
     if (setting->on_set_callback)
         setting->on_set_callback(setting);
@@ -391,18 +387,18 @@ void setting_set_color(setting_t *setting, const setting_color_t *color)
 #endif
 
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
-void setting_set_ipaddr(setting_t *setting, const setting_ipaddr_t *ipaddr)
+void setting_set_ipaddr(setting_t *setting, const ipaddr_t *ipaddr)
 {
-    setting->ipaddr = *ipaddr;
+    setting->ipaddr.val = *ipaddr;
 #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
     if (setting->on_set_callback)
         setting->on_set_callback(setting);
 #endif
 }
 
-void setting_set_netif(setting_t *setting, const setting_netif_t *netif)
+void setting_set_netif(setting_t *setting, const netif_conf_t *netif)
 {
-    setting->netif = *netif;
+    setting->netif.val = *netif;
 
 #ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
     if (setting->on_set_callback)
@@ -485,14 +481,14 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
-                    setting_color_t color;
+                    color_t color;
                     if (nvs_get_u32(nvs, setting->nvs_id, &color.combined) == ESP_OK)
                         setting_set_color(setting, &color);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
                 case SETTING_TYPE_IPADDR: {
-                    setting_ipaddr_t ipaddr;
+                    ipaddr_t ipaddr;
 
                     if (nvs_get_u32(nvs, setting->nvs_id, &ipaddr.addr) == ESP_OK)
                         setting_set_ipaddr(setting, &ipaddr);
@@ -500,7 +496,7 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
                 case SETTING_TYPE_NETIF: {
                     size_t               blob_len = sizeof(setting_netif_blob_t);
                     setting_netif_blob_t blob;
-                    setting_netif_t      netif = setting->netif;
+                    netif_conf_t         netif = setting->netif.val;
 
                     if (nvs_get_blob(nvs, setting->nvs_id, &blob, &blob_len) == ESP_OK && blob_len == sizeof(blob)) {
                         setting_netif_from_blob(&netif, &blob);
@@ -567,17 +563,17 @@ static esp_err_t setting_nvs_write(setting_t *setting, nvs_handle_t nvs)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     case SETTING_TYPE_COLOR: {
-        rc = nvs_set_u32(nvs, setting->nvs_id, setting->color.combined);
+        rc = nvs_set_u32(nvs, setting->nvs_id, setting->color.val.combined);
     } break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
     case SETTING_TYPE_IPADDR:
-        rc = nvs_set_u32(nvs, setting->nvs_id, setting->ipaddr.addr);
+        rc = nvs_set_u32(nvs, setting->nvs_id, setting->ipaddr.val.addr);
         break;
     case SETTING_TYPE_NETIF: {
         setting_netif_blob_t blob;
 
-        setting_netif_to_blob(&setting->netif, &blob);
+        setting_netif_to_blob(&setting->netif.val, &blob);
         rc = nvs_set_blob(nvs, setting->nvs_id, &blob, sizeof(blob));
     } break;
 #endif
@@ -764,29 +760,48 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
             case SETTING_TYPE_COLOR: {
                 char buf[8];
-                snprintf(buf, sizeof(buf), "#%02x%02x%02x", setting->color.r, setting->color.g, setting->color.b);
+                char def_buf[8];
+
+                snprintf(buf, sizeof(buf), "#%02x%02x%02x", setting->color.val.r, setting->color.val.g,
+                         setting->color.val.b);
+                snprintf(def_buf, sizeof(def_buf), "#%02x%02x%02x", setting->color.def.r, setting->color.def.g,
+                         setting->color.def.b);
                 cJSON_AddStringToObject(js_setting, "val", buf);
+                cJSON_AddStringToObject(js_setting, "def", def_buf);
             } break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
             case SETTING_TYPE_IPADDR: {
                 char buf[16];
+                char def_buf[16];
 
-                setting_ipaddr_to_string(&setting->ipaddr, buf, sizeof(buf));
+                setting_ipaddr_to_string(&setting->ipaddr.val, buf, sizeof(buf));
+                setting_ipaddr_to_string(&setting->ipaddr.def, def_buf, sizeof(def_buf));
                 cJSON_AddStringToObject(js_setting, "val", buf);
+                cJSON_AddStringToObject(js_setting, "def", def_buf);
             } break;
             case SETTING_TYPE_NETIF: {
                 char ip[16];
                 char netmask[16];
                 char gateway[16];
+                char def_ip[16];
+                char def_netmask[16];
+                char def_gateway[16];
 
-                setting_ipaddr_to_string(&setting->netif.ip, ip, sizeof(ip));
-                setting_ipaddr_to_string(&setting->netif.netmask, netmask, sizeof(netmask));
-                setting_ipaddr_to_string(&setting->netif.gateway, gateway, sizeof(gateway));
-                cJSON_AddBoolToObject(js_setting, "dhcp", setting->netif.dhcp);
+                setting_ipaddr_to_string(&setting->netif.val.ip, ip, sizeof(ip));
+                setting_ipaddr_to_string(&setting->netif.val.netmask, netmask, sizeof(netmask));
+                setting_ipaddr_to_string(&setting->netif.val.gateway, gateway, sizeof(gateway));
+                setting_ipaddr_to_string(&setting->netif.def.ip, def_ip, sizeof(def_ip));
+                setting_ipaddr_to_string(&setting->netif.def.netmask, def_netmask, sizeof(def_netmask));
+                setting_ipaddr_to_string(&setting->netif.def.gateway, def_gateway, sizeof(def_gateway));
+                cJSON_AddBoolToObject(js_setting, "dhcp", setting->netif.val.dhcp);
+                cJSON_AddBoolToObject(js_setting, "def_dhcp", setting->netif.def.dhcp);
                 cJSON_AddStringToObject(js_setting, "ip", ip);
                 cJSON_AddStringToObject(js_setting, "netmask", netmask);
                 cJSON_AddStringToObject(js_setting, "gateway", gateway);
+                cJSON_AddStringToObject(js_setting, "def_ip", def_ip);
+                cJSON_AddStringToObject(js_setting, "def_netmask", def_netmask);
+                cJSON_AddStringToObject(js_setting, "def_gateway", def_gateway);
             } break;
 #endif
             default:
@@ -832,10 +847,10 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                 sprintf(srch_id, "%s:%s", gr->id, setting->id);
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
                 if (setting->type == SETTING_TYPE_NETIF) {
-                    char             req_key[160];
-                    setting_netif_t  netif = setting->netif;
-                    bool             has_value = false;
-                    setting_ipaddr_t ipaddr;
+                    char         req_key[160];
+                    netif_conf_t netif = setting->netif.val;
+                    bool         has_value = false;
+                    ipaddr_t     ipaddr;
 
                     snprintf(req_key, sizeof(req_key), "%s:dhcp", srch_id);
                     netif.dhcp = httpd_query_key_value(req_data, req_key, value, sizeof(value)) == ESP_OK &&
@@ -862,7 +877,7 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                             netif.gateway = ipaddr;
                     }
 
-                    if (has_value || netif.dhcp != setting->netif.dhcp)
+                    if (has_value || netif.dhcp != setting->netif.val.dhcp)
                         setting_set_netif(setting, &netif);
                     continue;
                 }
@@ -916,13 +931,13 @@ static esp_err_t set_req_handle(httpd_req_t *req)
 #endif
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
                 case SETTING_TYPE_COLOR: {
-                    setting_color_t color = { .combined = strtol(value + 1, NULL, 16) };
+                    color_t color = { .combined = strtol(value + 1, NULL, 16) };
                     setting_set_color(setting, &color);
                 } break;
 #endif
 #ifdef CONFIG_SETTINGS_NET_SUPPORT
                 case SETTING_TYPE_IPADDR: {
-                    setting_ipaddr_t ipaddr;
+                    ipaddr_t ipaddr;
 
                     if (setting_ipaddr_from_string(value, &ipaddr))
                         setting_set_ipaddr(setting, &ipaddr);

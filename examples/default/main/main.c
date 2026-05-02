@@ -20,6 +20,7 @@ static const char *TAG = "APP";
 #define GROUP_TIMER_ID "TMR"
 #define GROUP_SAFETY_ID "SAFE"
 #define GROUP_NETWORK_ID "NET"
+#define GROUP_DATETIME_ID "DT"
 
 /* helper buffers / option lists */
 static char        hostname[32];
@@ -44,12 +45,12 @@ static setting_t device_settings_items[] = {
     { .id = "LEDCLR",
       .label = "LED color",
       .type = SETTING_TYPE_COLOR,
-      .color = { .combined = 0x00FF00 } }, /* default green */
+      .color = { .val = { .combined = 0x00FF00 }, .def = { .combined = 0x00FF00 } } }, /* default green */
 
     { .id = "UICLR",
       .label = "UI color",
       .type = SETTING_TYPE_COLOR,
-      .color = { .combined = 0xFFFFFF } }, /* default white */
+      .color = { .val = { .combined = 0xFFFFFF }, .def = { .combined = 0xFFFFFF } } }, /* default white */
 
     {} /* terminator */
 };
@@ -99,34 +100,13 @@ static setting_t safety_settings_items[] = {
     {} /* terminator */
 };
 
-/* NETWORK settings (includes timezone + date/time settings) */
-static setting_t network_settings_items[] = {
-    /* timezone setting */
+/* DATE/TIME settings */
+static setting_t datetime_settings_items[] = {
     { .id = "TZ",
       .label = "Timezone",
       .type = SETTING_TYPE_TIMEZONE,
       .timezone = { .val = tz_buf, .def = "UTC", .len = sizeof(tz_buf) } },
-    { .id = "WIFI_MODE",
-      .label = "Wi‑Fi mode",
-      .type = SETTING_TYPE_ONEOF,
-      .oneof = { .val = 2, .def = 2, .options = wifi_mode_opts } },
 
-#ifdef CONFIG_SETTINGS_NET_SUPPORT
-    { .id = "DNS", .label = "DNS server", .type = SETTING_TYPE_IPADDR, .ipaddr = { .octets = { 1, 1, 1, 1 } } },
-
-    { .id = "LAN",
-      .label = "LAN interface",
-      .type = SETTING_TYPE_NETIF,
-      .netif = { .dhcp = true,
-                 .ip = { .octets = { 192, 168, 4, 1 } },
-                 .netmask = { .octets = { 255, 255, 255, 0 } },
-                 .gateway = { .octets = { 192, 168, 4, 1 } } } },
-#endif
-
-/*
-     * Date / Time settings - useful for manual time tuning or schedule testing.
-     * These fields are optional depending on compile-time support in settings-defs.
-     */
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
     { .id = "DATE", .label = "Local date", .type = SETTING_TYPE_DATE, .date = { .day = 1, .month = 1, .year = 2025 } },
 
@@ -141,12 +121,42 @@ static setting_t network_settings_items[] = {
     {} /* terminator */
 };
 
+/* NETWORK settings */
+static setting_t network_settings_items[] = {
+    { .id = "WIFI_MODE",
+      .label = "Wi‑Fi mode",
+      .type = SETTING_TYPE_ONEOF,
+      .oneof = { .val = 2, .def = 2, .options = wifi_mode_opts } },
+
+#ifdef CONFIG_SETTINGS_NET_SUPPORT
+    { .id = "DNS",
+      .label = "DNS server",
+      .type = SETTING_TYPE_IPADDR,
+      .ipaddr = { .val = { .octets = { 1, 1, 1, 1 } }, .def = { .octets = { 1, 1, 1, 1 } } } },
+
+    { .id = "LAN",
+      .label = "LAN interface",
+      .type = SETTING_TYPE_NETIF,
+      .netif = { .val = { .dhcp = true,
+                          .ip = { .octets = { 192, 168, 4, 1 } },
+                          .netmask = { .octets = { 255, 255, 255, 0 } },
+                          .gateway = { .octets = { 192, 168, 4, 1 } } },
+                 .def = { .dhcp = true,
+                          .ip = { .octets = { 192, 168, 4, 1 } },
+                          .netmask = { .octets = { 255, 255, 255, 0 } },
+                          .gateway = { .octets = { 192, 168, 4, 1 } } } } },
+#endif
+
+    {} /* terminator */
+};
+
 /* top-level settings groups */
 static const settings_group_t app_settings[] = {
     { .id = GROUP_DEVICE_ID, .label = "Device", .settings = device_settings_items },
     { .id = GROUP_TIMER_ID, .label = "Timer", .settings = timer_settings_items },
     { .id = GROUP_SAFETY_ID, .label = "Safety", .settings = safety_settings_items },
     { .id = GROUP_NETWORK_ID, .label = "Network", .settings = network_settings_items },
+    { .id = GROUP_DATETIME_ID, .label = "Date & Time", .settings = datetime_settings_items },
     {} /* terminator */
 };
 
@@ -164,7 +174,7 @@ static esp_err_t on_settings_changed(const settings_group_t *settings, void *arg
 #ifdef CONFIG_SETTINGS_COLOR_SUPPORT
     setting_t *ledclr = settings_pack_find(settings, GROUP_DEVICE_ID, "LEDCLR");
     if (ledclr) {
-        ESP_LOGW(TAG, "-> LED color: 0x%06" PRIx32, ledclr->color.combined);
+        ESP_LOGW(TAG, "-> LED color: 0x%06" PRIx32, ledclr->color.val.combined);
     }
 #endif
 

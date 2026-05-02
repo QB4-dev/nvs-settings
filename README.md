@@ -66,9 +66,30 @@ static setting_t device_settings_items[] = {
     { .id = "LEDCOL",
       .label = "LED color",
       .type = SETTING_TYPE_COLOR,
-      .color = { .combined = 0x00FF00 } }, /* default green */
+      .color = { .val = { .combined = 0x00FF00 }, .def = { .combined = 0x00FF00 } } }, /* default green */
     {} /* terminator */
 };
+```
+
+For network-related types, defaults are defined the same way:
+
+```c
+{ .id = "DNS",
+  .label = "DNS server",
+  .type = SETTING_TYPE_IPADDR,
+  .ipaddr = { .val = { .octets = { 1, 1, 1, 1 } }, .def = { .octets = { 1, 1, 1, 1 } } } },
+
+{ .id = "LAN",
+  .label = "LAN interface",
+  .type = SETTING_TYPE_NETIF,
+  .netif = { .val = { .dhcp = true,
+                      .ip = { .octets = { 192, 168, 4, 1 } },
+                      .netmask = { .octets = { 255, 255, 255, 0 } },
+                      .gateway = { .octets = { 192, 168, 4, 1 } } },
+             .def = { .dhcp = true,
+                      .ip = { .octets = { 192, 168, 4, 1 } },
+                      .netmask = { .octets = { 255, 255, 255, 0 } },
+                      .gateway = { .octets = { 192, 168, 4, 1 } } } } },
 ```
 
 ### Defining global settings object
