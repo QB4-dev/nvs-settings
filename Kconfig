@@ -1,5 +1,9 @@
 menu "NVS Settings config"
 
+    config SETTINGS_FLOAT_SUPPORT
+        bool "Support float settings"
+        default y
+
     config SETTINGS_DATETIME_SUPPORT
         bool "Support date and time settings"
         default y
