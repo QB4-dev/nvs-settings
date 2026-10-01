@@ -27,6 +27,9 @@ typedef void (*setting_set_callback_t)(setting_t *setting);
 typedef enum {
     SETTING_TYPE_BOOL = 0,
     SETTING_TYPE_NUM,
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+    SETTING_TYPE_FLOAT,
+#endif
     SETTING_TYPE_ONEOF,
     SETTING_TYPE_TEXT,
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
@@ -69,6 +72,21 @@ typedef struct {
     int def;
     int range[2];
 } setting_int_t;
+
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+/**
+ * @brief Floating-point setting representation
+ *
+ * `val` is the current float value, `def` is the default, and
+ * `range` optionally holds an inclusive min/max pair.
+ */
+typedef struct {
+    float val;
+    float def;
+    float range[2];
+    float step; /**< Optional step size for the float value */
+} setting_float_t;
+#endif
 
 /**
  * @brief One-of (enumeration) setting representation
@@ -183,8 +201,11 @@ struct setting {
     char           nvs_id[SETTINGS_NVS_ID_LEN];
 
     union {
-        setting_bool_t  boolean;
-        setting_int_t   num;
+        setting_bool_t boolean;
+        setting_int_t  num;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+        setting_float_t floating;
+#endif
         setting_oneof_t oneof;
         setting_text_t  text;
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT

@@ -1,6 +1,7 @@
 #include "include/settings.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include <esp_system.h>
@@ -141,6 +142,11 @@ void settings_pack_print(const settings_group_t *settings_pack)
             case SETTING_TYPE_NUM:
                 printf("%d\n", setting->num.val);
                 break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+            case SETTING_TYPE_FLOAT:
+                printf("%g\n", (double)setting->floating.val);
+                break;
+#endif
             case SETTING_TYPE_ONEOF:
                 printf("%s\n", setting->oneof.options[setting->oneof.val]);
                 break;
@@ -220,6 +226,11 @@ void setting_set_defaults(setting_t *setting)
     case SETTING_TYPE_NUM:
         setting->num.val = setting->num.def;
         break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+    case SETTING_TYPE_FLOAT:
+        setting->floating.val = setting->floating.def;
+        break;
+#endif
     case SETTING_TYPE_ONEOF:
         setting->oneof.val = setting->oneof.def;
         break;
@@ -288,6 +299,20 @@ void setting_set_num(setting_t *setting, const int value)
         setting->on_set_callback(setting);
 #endif
 }
+
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+void setting_set_float(setting_t *setting, const float value)
+{
+    if (value < setting->floating.range[0] || value > setting->floating.range[1])
+        return;
+
+    setting->floating.val = value;
+#ifdef CONFIG_SETTINGS_CALLBACK_SUPPORT
+    if (setting->on_set_callback)
+        setting->on_set_callback(setting);
+#endif
+}
+#endif
 
 void setting_set_oneof(setting_t *setting, const int index)
 {
@@ -433,6 +458,14 @@ esp_err_t settings_nvs_read(const settings_group_t *settings_pack)
                     if (nvs_get_i32(nvs, setting->nvs_id, (int32_t *)&val) == ESP_OK)
                         setting_set_num(setting, val);
                 } break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+                case SETTING_TYPE_FLOAT: {
+                    float  val;
+                    size_t len = sizeof(val);
+                    if (nvs_get_blob(nvs, setting->nvs_id, &val, &len) == ESP_OK && len == sizeof(val))
+                        setting_set_float(setting, val);
+                } break;
+#endif
                 case SETTING_TYPE_ONEOF: {
                     int8_t val;
                     if (nvs_get_i8(nvs, setting->nvs_id, &val) == ESP_OK)
@@ -534,6 +567,11 @@ static esp_err_t setting_nvs_write(setting_t *setting, nvs_handle_t nvs)
     case SETTING_TYPE_NUM:
         rc = nvs_set_i32(nvs, setting->nvs_id, setting->num.val);
         break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+    case SETTING_TYPE_FLOAT:
+        rc = nvs_set_blob(nvs, setting->nvs_id, &setting->floating.val, sizeof(setting->floating.val));
+        break;
+#endif
     case SETTING_TYPE_ONEOF:
         rc = nvs_set_i8(nvs, setting->nvs_id, setting->oneof.val);
         break;
@@ -676,8 +714,11 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
     cJSON *js;
 
     const char *types[] = {
-        [SETTING_TYPE_BOOL] = "BOOL",         [SETTING_TYPE_NUM] = "NUM",     [SETTING_TYPE_ONEOF] = "ONEOF",
-        [SETTING_TYPE_TEXT] = "TEXT",
+        [SETTING_TYPE_BOOL] = "BOOL",         [SETTING_TYPE_NUM] = "NUM",
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+        [SETTING_TYPE_FLOAT] = "FLOAT",
+#endif
+        [SETTING_TYPE_ONEOF] = "ONEOF",       [SETTING_TYPE_TEXT] = "TEXT",
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
         [SETTING_TYPE_TIME] = "TIME",         [SETTING_TYPE_DATE] = "DATE",   [SETTING_TYPE_DATETIME] = "DATETIME",
 #endif
@@ -717,6 +758,15 @@ static cJSON *settings_pack_to_json(settings_group_t *settings_pack)
                 cJSON_AddNumberToObject(js_setting, "min", setting->num.range[0]);
                 cJSON_AddNumberToObject(js_setting, "max", setting->num.range[1]);
                 break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+            case SETTING_TYPE_FLOAT:
+                cJSON_AddNumberToObject(js_setting, "val", setting->floating.val);
+                cJSON_AddNumberToObject(js_setting, "def", setting->floating.def);
+                cJSON_AddNumberToObject(js_setting, "min", setting->floating.range[0]);
+                cJSON_AddNumberToObject(js_setting, "max", setting->floating.range[1]);
+                cJSON_AddNumberToObject(js_setting, "step", setting->floating.step);
+                break;
+#endif
             case SETTING_TYPE_ONEOF:
                 cJSON_AddNumberToObject(js_setting, "val", setting->oneof.val);
                 cJSON_AddNumberToObject(js_setting, "def", setting->oneof.def);
@@ -897,6 +947,14 @@ static esp_err_t set_req_handle(httpd_req_t *req)
                 case SETTING_TYPE_NUM: {
                     setting_set_num(setting, atoi(value));
                 } break;
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+                case SETTING_TYPE_FLOAT: {
+                    char *end;
+                    float parsed_value = strtof(value, &end);
+                    if (end != value && *end == '\0')
+                        setting_set_float(setting, parsed_value);
+                } break;
+#endif
                 case SETTING_TYPE_ONEOF: {
                     setting_set_oneof(setting, atoi(value));
                 } break;

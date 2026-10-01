@@ -76,6 +76,9 @@ void setting_set_defaults(setting_t *setting);
  */
 void setting_set_bool(setting_t *setting, const bool value);
 void setting_set_num(setting_t *setting, const int value);
+#ifdef CONFIG_SETTINGS_FLOAT_SUPPORT
+void setting_set_float(setting_t *setting, const float value);
+#endif
 void setting_set_oneof(setting_t *setting, const int index);
 void setting_set_text(setting_t *setting, const char *text);
 #ifdef CONFIG_SETTINGS_DATETIME_SUPPORT
